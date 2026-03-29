@@ -1,0 +1,15 @@
+# Compiled binaries and temporary build files
+build/
+sdkconfig
+sdkconfig.old
+
+# VS Code settings
+.vscode/
+!.vscode/extensions.json
+
+# Local environment/private files
+secrets.h
+*.log
+
+# Python cache
+__pycache__/
