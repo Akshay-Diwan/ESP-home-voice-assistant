@@ -8,7 +8,9 @@ idf_component_register(
         "wifi_comm.c" 
         "i2s_mic.c" 
         "hello_world_main.c"
-        "bt_audio.c"
+        "ws.c"
+        "automation.c"
+        "devices.c"
     INCLUDE_DIRS "."
     PRIV_REQUIRES 
         driver          # For I2S and GPIO
@@ -18,5 +20,7 @@ idf_component_register(
         nvs_flash       # For storing Wi-Fi credentials
         json            # This provides cJSON.h for your response
         esp_hw_support  # This provides esp_mac.h in newer IDF versions
+        esp_websocket_client
         # bt
+
 ) 
