@@ -794,7 +794,7 @@ void app_main(void)
     // Now it is safe to ping
     test_backend_ping();
 
-    i2s_mic_init(); // Clean and simple
+    i2s_mic_init();
     speaker_handle = speaker_init();
     if(!speaker_handle){
         ESP_LOGI("SPEAKER", "COULD NOT ATTACH HANDLE TO SPEAKER");
