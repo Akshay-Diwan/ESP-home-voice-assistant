@@ -17,6 +17,13 @@ spring:
       hibernate:
         format_sql: true
 
+mqtt:
+  broker: tcp://localhost:1883
+  username: user1
+  password: akshay
+  topic: test/topic
+  clientId: spring
+
 logging:
   level:
     org:
