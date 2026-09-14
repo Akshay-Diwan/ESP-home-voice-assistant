@@ -34,8 +34,16 @@ dependencies {
 
 
 	// MQTT
-	implementation 'org.springframework.integration:spring-integration-mqtt'
 	implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+	implementation "org.springframework.integration:spring-integration-mqtt:7.1.1"
+
+	//Google Calender
+	implementation 'com.google.apis:google-api-services-calendar:v3-rev20260708-2.0.0'
+    implementation 'com.google.api-client:google-api-client:2.9.1'
+    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.39.0'
+
+	testImplementation 'org.mockito:mockito-core:5.19.0'
+	testImplementation 'org.mockito:mockito-junit-jupiter:5.19.0'
 
 
 }

@@ -1,21 +1,15 @@
 package com.akshay.assistant;
-
-import org.springframework.integration.support.MessageBuilder;
-import org.springframework.messaging.MessageChannel;
 import org.springframework.stereotype.Component;
+
+import com.akshay.assistant.gateway.MqttGateway;
 
 @Component
 public class MqttPublisher {
-
-    private final MessageChannel mqttOutboundChannel;
-
-    public MqttPublisher(MessageChannel mqttOutboundChannel) {
-        this.mqttOutboundChannel = mqttOutboundChannel;
+    private final MqttGateway mqttGateway;
+    public MqttPublisher(MqttGateway mqttGateway){
+        this.mqttGateway = mqttGateway;
     }
-
     public void publish(String message) {
-        mqttOutboundChannel.send(
-            MessageBuilder.withPayload(message).build()
-        );
+        mqttGateway.sendToMqtt(message, "test/topic");
     }
 }

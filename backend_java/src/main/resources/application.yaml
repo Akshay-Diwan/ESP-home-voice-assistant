@@ -18,11 +18,19 @@ spring:
         format_sql: true
 
 mqtt:
-  broker: tcp://localhost:1883
-  username: user1
-  password: akshay
-  topic: test/topic
-  clientId: spring
+  url: "tcp://localhost:1883"
+  username: "user1"
+  password: "akshay"
+  default:
+    client:
+      id: "spring"
+
+calendar:
+  google:
+    application-name: ESP Assistant Calendar Tool
+    credentials-file: classpath:credentials.json
+    calendar-id: akwork6124@gmail.com
+    timezone: Asia/Kolkata
 
 logging:
   level:
