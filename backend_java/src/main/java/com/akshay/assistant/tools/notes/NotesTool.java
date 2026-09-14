@@ -74,36 +74,14 @@ public class NotesTool {
 
     public NoteResult<NoteSearchResult> search_notes(
             String query,
-            List<String> tags,
             int limit,
             int offset
     ) {
-        return provider.search_notes(query, tags, limit, offset);
+        return provider.search_notes(query, limit, offset);
     }
 
     public NoteResult<NoteSearchResult> search_notes(String query) {
-        return provider.search_notes(query, List.of(), 20, 0);
+        return provider.search_notes(query, 20, 0);
     }
 
-    public NoteResult<Void> add_tag(String note_id, String tag) {
-        try {
-            return provider.add_tag(UUID.fromString(note_id), tag);
-        } catch (IllegalArgumentException ex) {
-            return NoteResult.error(
-                    "DataInvalid",
-                    "note_id must be a valid UUID"
-            );
-        }
-    }
-
-    public NoteResult<Void> remove_tag(String note_id, String tag) {
-        try {
-            return provider.remove_tag(UUID.fromString(note_id), tag);
-        } catch (IllegalArgumentException ex) {
-            return NoteResult.error(
-                    "DataInvalid",
-                    "note_id must be a valid UUID"
-            );
-        }
-    }
 }

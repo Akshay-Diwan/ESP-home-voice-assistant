@@ -14,7 +14,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.UUID;
 
 @Component
@@ -29,30 +28,21 @@ public class NotionAdapter implements NoteProvider {
     private final ObjectMapper mapper;
 
     private final String dataSourceId;
-    private final String titleProperty;
-    private final String tagsProperty;
 
-    public NotionAdapter(
-            RestClient.Builder builder,
-            ObjectMapper mapper,
-            @Value("${notion.token}") String token,
-            @Value("${notion.page-id}") String dataSourceId,
-            @Value("${notion.title-property:Name}") String titleProperty,
-            @Value("${notion.tags-property:Tags}") String tagsProperty,
-            @Value("${notion.version}") String apiVersion
-    ) {
-        this.mapper = mapper;
-        this.dataSourceId = dataSourceId;
-        this.titleProperty = titleProperty;
-        this.tagsProperty = tagsProperty;
 
-        this.client = builder
-                .baseUrl("https://api.notion.com/v1/pages")
-                .defaultHeader("Authorization", "Bearer " + token)
-                .defaultHeader("Notion-Version", apiVersion)
-                .defaultHeader("Content-Type", "application/json")
-                .build();
-    }
+
+
+public NotionAdapter(
+        RestClient notionRestClient,
+        ObjectMapper mapper,
+        @Value("${notion.page-id}") String dataSourceId
+) {
+    this.client = notionRestClient;
+    this.mapper = mapper;
+    this.dataSourceId = dataSourceId;
+//     this.tagsProperty = tagsProperty;
+}
+
 
     // -------------------------------------------------------------------------
     // CREATE
@@ -72,8 +62,6 @@ public class NotionAdapter implements NoteProvider {
             );
         }
 
-        List<String> safeTags = normalizeTags(tags);
-
         try {
             ObjectNode body = mapper.createObjectNode();
 
@@ -81,7 +69,7 @@ public class NotionAdapter implements NoteProvider {
              * Create page inside the configured Notion data source.
              */
             ObjectNode parent = body.putObject("parent");
-            parent.put("data_source_id", dataSourceId);
+            parent.put("page_id", dataSourceId);
 
             /*
              * Page properties.
@@ -89,13 +77,8 @@ public class NotionAdapter implements NoteProvider {
             ObjectNode properties = body.putObject("properties");
 
             properties.set(
-                    titleProperty,
+                    "title",
                     NotionProperties.title(title)
-            );
-
-            properties.set(
-                    tagsProperty,
-                    NotionProperties.multiSelect(safeTags)
             );
 
             /*
@@ -248,17 +231,8 @@ public class NotionAdapter implements NoteProvider {
 
                 if (data.title() != null) {
                     properties.set(
-                            titleProperty,
+                            "title",
                             NotionProperties.title(data.title())
-                    );
-                }
-
-                if (data.tags() != null) {
-                    properties.set(
-                            tagsProperty,
-                            NotionProperties.multiSelect(
-                                    normalizeTags(data.tags())
-                            )
                     );
                 }
 
@@ -377,7 +351,6 @@ public class NotionAdapter implements NoteProvider {
     @Override
     public NoteResult<NoteSearchResult> search_notes(
             String query,
-            List<String> tags,
             int limit,
             int offset
     ) {
@@ -401,7 +374,6 @@ public class NotionAdapter implements NoteProvider {
                         ? ""
                         : query.trim().toLowerCase(Locale.ROOT);
 
-        List<String> requiredTags = normalizeTags(tags);
 
         try {
 
@@ -413,7 +385,6 @@ public class NotionAdapter implements NoteProvider {
             String cursor = null;
 
             do {
-
                 ObjectNode body = mapper.createObjectNode();
 
                 /*
@@ -423,29 +394,6 @@ public class NotionAdapter implements NoteProvider {
 
                 if (cursor != null) {
                     body.put("start_cursor", cursor);
-                }
-
-                /*
-                 * Tag filtering is delegated to Notion.
-                 */
-                if (!requiredTags.isEmpty()) {
-
-                    ArrayNode and =
-                            body.putObject("filter")
-                                    .putArray("and");
-
-                    for (String tag : requiredTags) {
-
-                        ObjectNode filter = and.addObject();
-
-                        filter.put(
-                                "property",
-                                tagsProperty
-                        );
-
-                        filter.putObject("multi_select")
-                                .put("contains", tag);
-                    }
                 }
 
                 JsonNode response = client.post()
@@ -480,16 +428,7 @@ public class NotionAdapter implements NoteProvider {
                                     || containsIgnoreCase(
                                             note.content(),
                                             normalizedQuery
-                                    )
-                                    || note.tags()
-                                            .stream()
-                                            .anyMatch(
-                                                    tag ->
-                                                            containsIgnoreCase(
-                                                                    tag,
-                                                                    normalizedQuery
-                                                            )
-                                            );
+                                    );
 
                     if (!matchesQuery) {
                         continue;
@@ -544,97 +483,8 @@ public class NotionAdapter implements NoteProvider {
     ) {
         return search_notes(
                 query,
-                List.of(),
                 20,
                 0
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // ADD TAG
-    // -------------------------------------------------------------------------
-
-    @Override
-    public NoteResult<Void> add_tag(
-            UUID noteId,
-            String tag
-    ) {
-
-        if (tag == null || tag.isBlank()) {
-            return NoteResult.error(
-                    "DataInvalid",
-                    "tag cannot be empty"
-            );
-        }
-
-        String normalizedTag = tag.trim();
-
-        NoteResult<Note> current =
-                get_note(noteId);
-
-        if ("error".equals(current.status())) {
-            return NoteResult.error(
-                    current.error(),
-                    current.message()
-            );
-        }
-
-        List<String> tags =
-                new ArrayList<>(current.data().tags());
-
-        if (!tags.contains(normalizedTag)) {
-            tags.add(normalizedTag);
-        }
-
-        return update_note(
-                noteId,
-                new NoteUpdate(
-                        null,
-                        null,
-                        tags
-                )
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // REMOVE TAG
-    // -------------------------------------------------------------------------
-
-    @Override
-    public NoteResult<Void> remove_tag(
-            UUID noteId,
-            String tag
-    ) {
-
-        if (tag == null || tag.isBlank()) {
-            return NoteResult.error(
-                    "DataInvalid",
-                    "tag cannot be empty"
-            );
-        }
-
-        NoteResult<Note> current =
-                get_note(noteId);
-
-        if ("error".equals(current.status())) {
-            return NoteResult.error(
-                    current.error(),
-                    current.message()
-            );
-        }
-
-        List<String> tags =
-                new ArrayList<>(current.data().tags());
-
-        tags.remove(tag.trim());
-
-        return update_note(
-                noteId,
-                new NoteUpdate(
-                        null,
-                        null,
-                        tags
-                )
         );
     }
 
@@ -805,12 +655,7 @@ public class NotionAdapter implements NoteProvider {
 
         String title =
                 extractTitle(
-                        properties.path(titleProperty)
-                );
-
-        List<String> tags =
-                extractTags(
-                        properties.path(tagsProperty)
+                        properties.path("title")
                 );
 
         String content =
@@ -831,8 +676,7 @@ public class NotionAdapter implements NoteProvider {
                 title,
                 content,
                 createdAt,
-                updatedAt,
-                tags
+                updatedAt
         );
     }
 
@@ -976,47 +820,10 @@ public class NotionAdapter implements NoteProvider {
         return title.toString();
     }
 
-    private List<String> extractTags(
-            JsonNode property
-    ) {
-
-        List<String> tags =
-                new ArrayList<>();
-
-        for (JsonNode item :
-                property.path("multi_select")) {
-
-            String name =
-                    item.path("name").asString();
-
-            if (!name.isBlank()) {
-                tags.add(name);
-            }
-        }
-
-        return List.copyOf(tags);
-    }
 
     // -------------------------------------------------------------------------
     // HELPERS
     // -------------------------------------------------------------------------
-
-    private List<String> normalizeTags(
-            List<String> tags
-    ) {
-
-        if (tags == null) {
-            return List.of();
-        }
-
-        return tags.stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .distinct()
-                .toList();
-    }
-
     private boolean containsIgnoreCase(
             String value,
             String query

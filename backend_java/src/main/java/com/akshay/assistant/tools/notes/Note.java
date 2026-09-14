@@ -1,7 +1,6 @@
 package com.akshay.assistant.tools.notes;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 
 public record Note(
@@ -9,10 +8,7 @@ public record Note(
         String title,
         String content,
         OffsetDateTime created_at,
-        OffsetDateTime updated_at,
-        List<String> tags
+        OffsetDateTime updated_at
 ) {
-    public Note {
-        tags = tags == null ? List.of() : List.copyOf(tags);
-    }
+
 }

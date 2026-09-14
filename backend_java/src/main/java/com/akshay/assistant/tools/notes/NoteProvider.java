@@ -15,12 +15,7 @@ public interface NoteProvider {
 
     NoteResult<NoteSearchResult> search_notes(
             String query,
-            List<String> tags,
             int limit,
             int offset
     );
-
-    NoteResult<Void> add_tag(UUID noteId, String tag);
-
-    NoteResult<Void> remove_tag(UUID noteId, String tag);
 }
