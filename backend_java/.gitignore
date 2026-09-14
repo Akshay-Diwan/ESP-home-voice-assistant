@@ -38,3 +38,5 @@ out/
 
 ##OAuth
 src/main/resources/credentials.json
+
+.env

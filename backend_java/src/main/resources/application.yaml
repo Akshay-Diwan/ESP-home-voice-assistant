@@ -32,6 +32,12 @@ calendar:
     calendar-id: akwork6124@gmail.com
     timezone: Asia/Kolkata
 
+notion:
+  api:
+    token: ${NOTION_TOKEN}
+    version: "2022-06-28"
+    page-id: 3db54d38bea18014b882e5de2298bbd5
+
 logging:
   level:
     org:
