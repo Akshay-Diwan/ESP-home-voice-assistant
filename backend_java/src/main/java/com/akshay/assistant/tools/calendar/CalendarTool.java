@@ -97,11 +97,8 @@ public class CalendarTool {
         return createEvent(eventName, startTime, startTime.plusHours(1), description);
     }
 
-    /**
-     * SRS-shaped update API:
-     *
-     * updateEvent(event_id, data)
-     */
+    // updateEvent(event_id, data)
+    
     public CalendarResponse updateEvent(String eventId, EventUpdate data) {
         if (data == null) {
             return CalendarResponse.error(
