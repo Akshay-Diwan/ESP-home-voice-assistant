@@ -11,7 +11,7 @@ public class NotionConfig {
     @Bean
     RestClient notionRestClient(
             @Value("${notion.version}") String apiVersion,
-            @Value("${notion.token}") String token
+            @Value("${notion.token:REMOVED}") String token
     ) {
         return RestClient.builder()
                 .baseUrl("https://api.notion.com/v1")

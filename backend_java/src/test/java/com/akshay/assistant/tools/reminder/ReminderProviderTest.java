@@ -10,7 +10,7 @@ import tools.jackson.databind.JsonNode;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-class reminderProviderTest {
+class ReminderProviderTest {
 
     @Autowired
     private ReminderProvider reminderProvider;

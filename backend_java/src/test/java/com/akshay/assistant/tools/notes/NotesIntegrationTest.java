@@ -5,24 +5,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.integration.annotation.IntegrationComponentScan;
-import org.springframework.integration.config.EnableIntegration;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(properties = {
-    "mqtt.url=tcp://localhost:1883",
-    "mqtt.username=user1",
-    "mqtt.password=akshay"
-}) 
-@EnableIntegration 
-@IntegrationComponentScan(basePackages = "com.akshay.assistant.gateway")
-@ActiveProfiles("test")
+@SpringBootTest 
 class NotesIntegrationTest {
+        
 @Autowired
 private NotesTool notesTool;
 
@@ -90,7 +81,6 @@ void createNote_shouldCreateNoteInNotion() {
             );
 
     assertNotNull(result);
-
     assertEquals(
             "success",
             result.status()

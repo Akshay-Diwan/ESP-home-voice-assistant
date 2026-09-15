@@ -1,8 +1,10 @@
 package com.akshay.assistant.tools.messaging;
 
+import com.akshay.assistant.tools.messaging.entity.AvailableChatEntity;
 import com.akshay.assistant.tools.messaging.model.ChatResponse;
 import com.akshay.assistant.tools.messaging.model.ConversationHistoryResponse;
 import com.akshay.assistant.tools.messaging.model.UnreadChatsResponse;
+import com.akshay.assistant.tools.messaging.repository.AvailableChatRepository;
 
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +20,20 @@ class DiscordChatToolIntegrationTest {
 
     @Autowired
     private DiscordChatTool discordChatTool;
+    @Autowired 
+    private AvailableChatRepository chatRepository;
 
+    @BeforeEach
+    void setUp() {
+        AvailableChatEntity chat = new AvailableChatEntity();
+
+        chat.setAuthorId("856137411649208360");
+        chat.setChannelId("1549352746912710786");
+        chat.setName("ak7150");
+        chat.setGlobalName("Akshay");
+
+        chatRepository.save(chat);
+    }
     @BeforeAll
     void waitForDiscordBot() throws InterruptedException {
         /*
@@ -70,7 +85,7 @@ class DiscordChatToolIntegrationTest {
     @Test
     void shouldSendMessageToDiscord() {
 
-        String chatName = "general";
+        String chatName = "ak7150";
 
         ChatResponse result =
                 discordChatTool.sendMessage(

@@ -6,6 +6,9 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.User;
 import org.springframework.stereotype.Component;
 
+import com.akshay.assistant.tools.messaging.entity.AvailableChatEntity;
+import com.akshay.assistant.tools.messaging.repository.AvailableChatRepository;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,9 +16,10 @@ import java.util.List;
 public class DiscordChatResolver {
 
     private final JDA jda;
-
-    public DiscordChatResolver(JDA jda) {
+    private final AvailableChatRepository chatRepository;
+    public DiscordChatResolver(JDA jda,AvailableChatRepository chatRepository) {
         this.jda = jda;
+        this.chatRepository = chatRepository;
     }
 
     public MessageChannel resolve(String chatName) {
@@ -24,16 +28,27 @@ public class DiscordChatResolver {
         }
 
         String wanted = chatName.trim();
-
+        System.out.println("Wanted = " + wanted);
         List<MessageChannel> matches = new ArrayList<>();
-        System.out.println("Channel Chats: ");
-        for (PrivateChannel channel : jda.getPrivateChannels()) {
-            User user = channel.getUser();
-            System.out.println(user.getName() + " " + user.getGlobalName());
-            if (matchesName(user.getName(), user.getGlobalName(), wanted)) {
+        System.out.println("PrivateChannel Chats: ");
+
+        List<AvailableChatEntity> chatEntityList = chatRepository.findAllByNameIgnoreCase(wanted);
+        for(AvailableChatEntity chatEntity: chatEntityList){
+            System.out.println("Name : " + chatEntity.getName() + " Global Name: " + chatEntity.getGlobalName());
+
+            PrivateChannel channel = jda.getPrivateChannelById(chatEntity.getChannelId());
+            if (channel == null) {
+                User user = jda.retrieveUserById(chatEntity.getAuthorId()).complete();
+                channel = user.openPrivateChannel().complete();
+            }
+            if (channel != null) {
                 matches.add(channel);
             }
+            else {
+                System.out.println("Private Channel is Null");
+            }
         }
+
         System.out.println("TextChannel List: ");
         for (TextChannel channel : jda.getTextChannels()) {
             System.out.println(channel.getName());
@@ -42,7 +57,8 @@ public class DiscordChatResolver {
                 matches.add(channel);
             }
         }
-        
+        System.out.println("JDA users: ");
+        System.out.println(jda.getUsers());
         if (matches.isEmpty()) {
             // Discord does not provide a global user search by display name.
             // JDA can resolve users that are currently visible in its user cache.
@@ -54,6 +70,7 @@ public class DiscordChatResolver {
                 }
             }
         }
+
 
         if (matches.isEmpty()) {
             throw new ChatToolException(
@@ -89,10 +106,5 @@ public class DiscordChatResolver {
                 "ChatNotFound",
                 "No Discord chat found with id '" + channelId + "'."
         );
-    }
-
-    private boolean matchesName(String username, String globalName, String wanted) {
-        return username.equalsIgnoreCase(wanted)
-                || (globalName != null && globalName.equalsIgnoreCase(wanted));
     }
 }

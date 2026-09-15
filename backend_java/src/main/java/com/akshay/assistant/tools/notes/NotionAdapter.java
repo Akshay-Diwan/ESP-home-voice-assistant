@@ -19,30 +19,24 @@ import java.util.UUID;
 @Component
 public class NotionAdapter implements NoteProvider {
 
-    /*
-     * Notion rich_text content has a size limit.
-     */
     private static final int NOTION_RICH_TEXT_LIMIT = 1800;
 
     private final RestClient client;
     private final ObjectMapper mapper;
-
     private final String dataSourceId;
+    private final String categoryProperty;
 
-
-
-
-public NotionAdapter(
-        RestClient notionRestClient,
-        ObjectMapper mapper,
-        @Value("${notion.page-id}") String dataSourceId
-) {
-    this.client = notionRestClient;
-    this.mapper = mapper;
-    this.dataSourceId = dataSourceId;
-//     this.tagsProperty = tagsProperty;
-}
-
+    public NotionAdapter(
+            RestClient notionRestClient,
+            ObjectMapper mapper,
+            @Value("${notion.data-source-id}") String dataSourceId,
+            @Value("${notion.category-property:Category}") String categoryProperty
+    ) {
+        this.client = notionRestClient;
+        this.mapper = mapper;
+        this.dataSourceId = dataSourceId;
+        this.categoryProperty = categoryProperty;
+    }
 
     // -------------------------------------------------------------------------
     // CREATE
@@ -56,6 +50,7 @@ public NotionAdapter(
     ) {
 
         if (title == null || title.isBlank()) {
+            System.out.println("[NotionAdapter ERROR] create_note failed: Title cannot be empty");
             return NoteResult.error(
                     "DataInvalid",
                     "Title cannot be empty"
@@ -66,26 +61,26 @@ public NotionAdapter(
             ObjectNode body = mapper.createObjectNode();
 
             /*
-             * Create page inside the configured Notion data source.
+             * Parent configured as data_source / database.
              */
             ObjectNode parent = body.putObject("parent");
-            parent.put("page_id", dataSourceId);
+            parent.put("database_id", dataSourceId);
 
             /*
-             * Page properties.
+             * Page properties: Title + Multi-select Category/Tags
              */
             ObjectNode properties = body.putObject("properties");
 
-            properties.set(
-                    "title",
-                    NotionProperties.title(title)
-            );
+            properties.set("title", NotionProperties.title(title));
+
+            if (tags != null && !tags.isEmpty()) {
+                properties.set(categoryProperty, createMultiSelectProperty(tags));
+            }
 
             /*
-             * Page content.
+             * Page content blocks
              */
             ArrayNode children = body.putArray("children");
-
             appendContentBlocks(children, content);
 
             JsonNode response = client.post()
@@ -95,6 +90,7 @@ public NotionAdapter(
                     .body(JsonNode.class);
 
             if (response == null || response.path("id").isMissingNode()) {
+                System.out.println("[NotionAdapter ERROR] create_note failed: Notion returned invalid response -> " + response);
                 return NoteResult.error(
                         "OperationError",
                         "Notion returned an invalid response"
@@ -108,15 +104,19 @@ public NotionAdapter(
             return NoteResult.success(noteId);
 
         } catch (RestClientResponseException ex) {
+            String err = notionError(ex);
+            System.out.println("[NotionAdapter ERROR] create_note RestClient Exception (" + ex.getStatusCode() + "): " + err);
             return NoteResult.error(
                     "OperationError",
-                    notionError(ex)
+                    err
             );
-
         } catch (Exception ex) {
+            String err = safeMessage(ex);
+            System.out.println("[NotionAdapter ERROR] create_note Unexpected Exception: " + err);
+            ex.printStackTrace();
             return NoteResult.error(
                     "OperationError",
-                    safeMessage(ex)
+                    err
             );
         }
     }
@@ -136,6 +136,7 @@ public NotionAdapter(
     public NoteResult<Note> get_note(UUID noteId) {
 
         if (noteId == null) {
+            System.out.println("[NotionAdapter ERROR] get_note failed: note_id cannot be null");
             return NoteResult.error(
                     "DataInvalid",
                     "note_id cannot be null"
@@ -143,41 +144,43 @@ public NotionAdapter(
         }
 
         try {
-
             JsonNode page = client.get()
                     .uri("/pages/{id}", noteId)
                     .retrieve()
                     .body(JsonNode.class);
 
             if (page == null) {
+                System.out.println("[NotionAdapter ERROR] get_note failed: No note with id " + noteId + " found");
                 return NoteResult.error(
                         "NoteNotFoundError",
                         "No note with id " + noteId + " found"
                 );
             }
 
-            return NoteResult.success(
-                    readNote(page)
-            );
+            return NoteResult.success(readNote(page));
 
         } catch (RestClientResponseException ex) {
-
             if (ex.getStatusCode().value() == 404) {
+                System.out.println("[NotionAdapter ERROR] get_note failed: Note " + noteId + " not found (404)");
                 return NoteResult.error(
                         "NoteNotFoundError",
                         "No note with id " + noteId + " found"
                 );
             }
 
+            String err = notionError(ex);
+            System.out.println("[NotionAdapter ERROR] get_note RestClient Exception (" + ex.getStatusCode() + "): " + err);
             return NoteResult.error(
                     "OperationError",
-                    notionError(ex)
+                    err
             );
-
         } catch (Exception ex) {
+            String err = safeMessage(ex);
+            System.out.println("[NotionAdapter ERROR] get_note Unexpected Exception: " + err);
+            ex.printStackTrace();
             return NoteResult.error(
                     "OperationError",
-                    safeMessage(ex)
+                    err
             );
         }
     }
@@ -193,6 +196,7 @@ public NotionAdapter(
     ) {
 
         if (noteId == null) {
+            System.out.println("[NotionAdapter ERROR] update_note failed: note_id cannot be null");
             return NoteResult.error(
                     "DataInvalid",
                     "note_id cannot be null"
@@ -200,12 +204,9 @@ public NotionAdapter(
         }
 
         if (data == null ||
-                (
-                        data.title() == null &&
-                        data.content() == null &&
-                        data.tags() == null
-                )
+                (data.title() == null && data.content() == null && data.tags() == null)
         ) {
+            System.out.println("[NotionAdapter ERROR] update_note failed: No data parameters provided for note " + noteId);
             return NoteResult.error(
                     "NoDataProvided",
                     "provide atleast one parameter"
@@ -213,6 +214,7 @@ public NotionAdapter(
         }
 
         if (data.title() != null && data.title().isBlank()) {
+            System.out.println("[NotionAdapter ERROR] update_note failed: Title cannot be empty for note " + noteId);
             return NoteResult.error(
                     "DataInvalid",
                     "Title cannot be empty"
@@ -220,7 +222,6 @@ public NotionAdapter(
         }
 
         try {
-
             /*
              * Update title/tags through page properties.
              */
@@ -230,10 +231,11 @@ public NotionAdapter(
                 ObjectNode properties = body.putObject("properties");
 
                 if (data.title() != null) {
-                    properties.set(
-                            "title",
-                            NotionProperties.title(data.title())
-                    );
+                    properties.set("title", NotionProperties.title(data.title()));
+                }
+
+                if (data.tags() != null) {
+                    properties.set(categoryProperty, createMultiSelectProperty(data.tags()));
                 }
 
                 client.patch()
@@ -244,7 +246,7 @@ public NotionAdapter(
             }
 
             /*
-             * Replace content only if content was explicitly supplied.
+             * Replace body content if supplied.
              */
             if (data.content() != null) {
                 replaceContent(noteId, data.content());
@@ -253,23 +255,27 @@ public NotionAdapter(
             return NoteResult.success(null);
 
         } catch (RestClientResponseException ex) {
-
             if (ex.getStatusCode().value() == 404) {
+                System.out.println("[NotionAdapter ERROR] update_note failed: Note " + noteId + " not found (404)");
                 return NoteResult.error(
                         "NoteNotFoundError",
                         "No note with id " + noteId + " found"
                 );
             }
 
+            String err = notionError(ex);
+            System.out.println("[NotionAdapter ERROR] update_note RestClient Exception (" + ex.getStatusCode() + "): " + err);
             return NoteResult.error(
                     "OperationError",
-                    notionError(ex)
+                    err
             );
-
         } catch (Exception ex) {
+            String err = safeMessage(ex);
+            System.out.println("[NotionAdapter ERROR] update_note Unexpected Exception: " + err);
+            ex.printStackTrace();
             return NoteResult.error(
                     "OperationError",
-                    safeMessage(ex)
+                    err
             );
         }
     }
@@ -282,6 +288,7 @@ public NotionAdapter(
     public NoteResult<Note> delete_note(UUID noteId) {
 
         if (noteId == null) {
+            System.out.println("[NotionAdapter ERROR] delete_note failed: note_id cannot be null");
             return NoteResult.error(
                     "DataInvalid",
                     "note_id cannot be null"
@@ -289,17 +296,13 @@ public NotionAdapter(
         }
 
         try {
-
-            /*
-             * Get the note before deleting it because the SRS
-             * requires deleted note information in the response.
-             */
             JsonNode page = client.get()
                     .uri("/pages/{id}", noteId)
                     .retrieve()
                     .body(JsonNode.class);
 
             if (page == null) {
+                System.out.println("[NotionAdapter ERROR] delete_note failed: No note with id " + noteId + " found");
                 return NoteResult.error(
                         "NoteNotFoundError",
                         "No note with id " + noteId + " found"
@@ -308,9 +311,6 @@ public NotionAdapter(
 
             Note note = readNote(page);
 
-            /*
-             * Notion deletion is implemented by moving the page to trash.
-             */
             ObjectNode body = mapper.createObjectNode();
             body.put("in_trash", true);
 
@@ -323,23 +323,27 @@ public NotionAdapter(
             return NoteResult.success(note);
 
         } catch (RestClientResponseException ex) {
-
             if (ex.getStatusCode().value() == 404) {
+                System.out.println("[NotionAdapter ERROR] delete_note failed: Note " + noteId + " not found (404)");
                 return NoteResult.error(
                         "NoteNotFoundError",
                         "No note with id " + noteId + " found"
                 );
             }
 
+            String err = notionError(ex);
+            System.out.println("[NotionAdapter ERROR] delete_note RestClient Exception (" + ex.getStatusCode() + "): " + err);
             return NoteResult.error(
                     "OperationError",
-                    notionError(ex)
+                    err
             );
-
         } catch (Exception ex) {
+            String err = safeMessage(ex);
+            System.out.println("[NotionAdapter ERROR] delete_note Unexpected Exception: " + err);
+            ex.printStackTrace();
             return NoteResult.error(
                     "OperationError",
-                    safeMessage(ex)
+                    err
             );
         }
     }
@@ -356,6 +360,7 @@ public NotionAdapter(
     ) {
 
         if (limit <= 0) {
+            System.out.println("[NotionAdapter ERROR] search_notes failed: limit must be greater than 0");
             return NoteResult.error(
                     "OperationError",
                     "limit must be greater than 0"
@@ -363,33 +368,22 @@ public NotionAdapter(
         }
 
         if (offset < 0) {
+            System.out.println("[NotionAdapter ERROR] search_notes failed: offset must not be negative");
             return NoteResult.error(
                     "OperationError",
                     "offset must not be negative"
             );
         }
 
-        String normalizedQuery =
-                query == null
-                        ? ""
-                        : query.trim().toLowerCase(Locale.ROOT);
-
+        String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
 
         try {
-
             int matchingCount = 0;
-
-            List<Note> result =
-                    new ArrayList<>(Math.min(limit, 20));
-
+            List<Note> result = new ArrayList<>(Math.min(limit, 20));
             String cursor = null;
 
             do {
                 ObjectNode body = mapper.createObjectNode();
-
-                /*
-                 * Maximum page size supported by the API.
-                 */
                 body.put("page_size", 100);
 
                 if (cursor != null) {
@@ -397,10 +391,7 @@ public NotionAdapter(
                 }
 
                 JsonNode response = client.post()
-                        .uri(
-                                "/data_sources/{id}/query",
-                                dataSourceId
-                        )
+                        .uri("/databases/{id}/query", dataSourceId)
                         .body(body)
                         .retrieve()
                         .body(JsonNode.class);
@@ -409,26 +400,12 @@ public NotionAdapter(
                     break;
                 }
 
-                for (JsonNode page :
-                        response.path("results")) {
-
+                for (JsonNode page : response.path("results")) {
                     Note note = readNote(page);
 
-                    /*
-                     * Notion cannot directly search arbitrary page body
-                     * content through the data-source query, so content
-                     * matching is performed here.
-                     */
-                    boolean matchesQuery =
-                            normalizedQuery.isEmpty()
-                                    || containsIgnoreCase(
-                                            note.title(),
-                                            normalizedQuery
-                                    )
-                                    || containsIgnoreCase(
-                                            note.content(),
-                                            normalizedQuery
-                                    );
+                    boolean matchesQuery = normalizedQuery.isEmpty()
+                            || containsIgnoreCase(note.title(), normalizedQuery)
+                            || containsIgnoreCase(note.content(), normalizedQuery);
 
                     if (!matchesQuery) {
                         continue;
@@ -436,350 +413,221 @@ public NotionAdapter(
 
                     matchingCount++;
 
-                    /*
-                     * Apply offset after filtering.
-                     */
-                    if (matchingCount > offset &&
-                            result.size() < limit) {
-
+                    if (matchingCount > offset && result.size() < limit) {
                         result.add(note);
                     }
                 }
 
-                cursor =
-                        response.path("has_more")
-                                .asBoolean(false)
-                                ? response.path("next_cursor")
-                                        .asString(null)
-                                : null;
+                cursor = response.path("has_more").asBoolean(false)
+                        ? response.path("next_cursor").asString(null)
+                        : null;
 
             } while (cursor != null);
 
-            return NoteResult.success(
-                    new NoteSearchResult(
-                            matchingCount,
-                            result
-                    )
-            );
+            return NoteResult.success(new NoteSearchResult(matchingCount, result));
 
         } catch (RestClientResponseException ex) {
-
+            String err = notionError(ex);
+            System.out.println("[NotionAdapter ERROR] search_notes RestClient Exception (" + ex.getStatusCode() + "): " + err);
             return NoteResult.error(
                     "OperationError",
-                    notionError(ex)
+                    err
             );
-
         } catch (Exception ex) {
-
+            String err = safeMessage(ex);
+            System.out.println("[NotionAdapter ERROR] search_notes Unexpected Exception: " + err);
+            ex.printStackTrace();
             return NoteResult.error(
                     "OperationError",
-                    safeMessage(ex)
+                    err
             );
         }
     }
 
-    public NoteResult<NoteSearchResult> search_notes(
-            String query
-    ) {
-        return search_notes(
-                query,
-                20,
-                0
-        );
+    public NoteResult<NoteSearchResult> search_notes(String query) {
+        return search_notes(query, 20, 0);
     }
 
     // -------------------------------------------------------------------------
-    // CONTENT
+    // HELPER METHODS
     // -------------------------------------------------------------------------
 
-    private void replaceContent(
-            UUID pageId,
-            String content
-    ) {
+    private ObjectNode createMultiSelectProperty(List<String> tags) {
+        ObjectNode multiSelectNode = mapper.createObjectNode();
+        ArrayNode options = multiSelectNode.putArray("multi_select");
 
+        for (String tag : tags) {
+            if (tag != null && !tag.isBlank()) {
+                options.addObject().put("name", tag.trim());
+            }
+        }
+        return multiSelectNode;
+    }
+
+    private void replaceContent(UUID pageId, String content) {
         JsonNode children = client.get()
-                .uri(
-                        uriBuilder -> uriBuilder
-                                .path("/blocks/{id}/children")
-                                .queryParam("page_size", 100)
-                                .build(pageId)
-                )
+                .uri(uriBuilder -> uriBuilder
+                        .path("/blocks/{id}/children")
+                        .queryParam("page_size", 100)
+                        .build(pageId))
                 .retrieve()
                 .body(JsonNode.class);
 
-        /*
-         * Delete existing top-level blocks.
-         */
         if (children != null) {
-
-            for (JsonNode child :
-                    children.path("results")) {
-
-                String blockId =
-                        child.path("id").asString(null);
+            for (JsonNode child : children.path("results")) {
+                String blockId = child.path("id").asString(null);
 
                 if (blockId == null || blockId.isBlank()) {
                     continue;
                 }
 
                 client.delete()
-                        .uri(
-                                "/blocks/{id}",
-                                blockId
-                        )
+                        .uri("/blocks/{id}", blockId)
                         .retrieve()
                         .toBodilessEntity();
             }
         }
 
-        /*
-         * Add the new content.
-         */
-        ObjectNode body =
-                mapper.createObjectNode();
+        ObjectNode body = mapper.createObjectNode();
+        ArrayNode blocks = body.putArray("children");
 
-        ArrayNode blocks =
-                body.putArray("children");
-
-        appendContentBlocks(
-                blocks,
-                content
-        );
+        appendContentBlocks(blocks, content);
 
         if (blocks.isEmpty()) {
             return;
         }
 
         client.patch()
-                .uri(
-                        "/blocks/{id}/children",
-                        pageId
-                )
+                .uri("/blocks/{id}/children", pageId)
                 .body(body)
                 .retrieve()
                 .toBodilessEntity();
     }
 
-    private void appendContentBlocks(
-            ArrayNode children,
-            String content
-    ) {
-
+    private void appendContentBlocks(ArrayNode children, String content) {
         if (content == null || content.isBlank()) {
             return;
         }
 
-        /*
-         * Treat blank lines as paragraph separators.
-         */
-        String[] paragraphs =
-                content.split("\\R\\R+");
+        String[] paragraphs = content.split("\\R\\R+");
 
         for (String paragraph : paragraphs) {
-
             String text = paragraph.strip();
 
             if (text.isEmpty()) {
                 continue;
             }
 
-            /*
-             * Split long paragraphs because Notion rich text
-             * has a maximum content size.
-             */
-            for (
-                    int start = 0;
-                    start < text.length();
-                    start += NOTION_RICH_TEXT_LIMIT
-            ) {
-
-                String chunk =
-                        text.substring(
-                                start,
-                                Math.min(
-                                        start + NOTION_RICH_TEXT_LIMIT,
-                                        text.length()
-                                )
-                        );
-
-                ObjectNode block =
-                        children.addObject();
-
-                block.put(
-                        "object",
-                        "block"
+            for (int start = 0; start < text.length(); start += NOTION_RICH_TEXT_LIMIT) {
+                String chunk = text.substring(
+                        start,
+                        Math.min(start + NOTION_RICH_TEXT_LIMIT, text.length())
                 );
 
-                block.put(
-                        "type",
-                        "paragraph"
-                );
+                ObjectNode block = children.addObject();
+                block.put("object", "block");
+                block.put("type", "paragraph");
 
-                ObjectNode paragraphNode =
-                        block.putObject("paragraph");
+                ObjectNode paragraphNode = block.putObject("paragraph");
+                ArrayNode richText = paragraphNode.putArray("rich_text");
 
-                ArrayNode richText =
-                        paragraphNode.putArray("rich_text");
-
-                ObjectNode textNode =
-                        richText.addObject();
-
-                textNode.put(
-                        "type",
-                        "text"
-                );
-
-                textNode
-                        .putObject("text")
-                        .put(
-                                "content",
-                                chunk
-                        );
+                ObjectNode textNode = richText.addObject();
+                textNode.put("type", "text");
+                textNode.putObject("text").put("content", chunk);
             }
         }
     }
 
-    // -------------------------------------------------------------------------
-    // READ NOTE
-    // -------------------------------------------------------------------------
+private Note readNote(JsonNode page) {
+    UUID id = UUID.fromString(page.path("id").asString());
+    JsonNode properties = page.path("properties");
 
-    private Note readNote(JsonNode page) {
+    // The property key in your database schema is "Doc name"
+    String title = extractTitle(properties.path("Doc name"));
+    String content = readContent(id);
 
-        UUID id =
-                UUID.fromString(
-                        page.path("id").asString()
-                );
+    OffsetDateTime createdAt = OffsetDateTime.parse(
+            page.path("created_time").asString()
+    );
 
-        JsonNode properties =
-                page.path("properties");
+    OffsetDateTime updatedAt = OffsetDateTime.parse(
+            page.path("last_edited_time").asString()
+    );
 
-        String title =
-                extractTitle(
-                        properties.path("title")
-                );
+    return new Note(
+            id,
+            title,
+            content,
+            createdAt,
+            updatedAt
+    );
+}
 
-        String content =
-                readContent(id);
-
-        OffsetDateTime createdAt =
-                OffsetDateTime.parse(
-                        page.path("created_time").asString()
-                );
-
-        OffsetDateTime updatedAt =
-                OffsetDateTime.parse(
-                        page.path("last_edited_time").asString()
-                );
-
-        return new Note(
-                id,
-                title,
-                content,
-                createdAt,
-                updatedAt
-        );
+private String extractTitle(JsonNode docNameProperty) {
+    // "Doc name" contains a nested array under "title"
+    JsonNode titleArray = docNameProperty.path("title");
+    if (titleArray.isArray() && !titleArray.isEmpty()) {
+        return titleArray.get(0).path("plain_text").asString("");
     }
-
-    // -------------------------------------------------------------------------
-    // READ CONTENT
-    // -------------------------------------------------------------------------
+    return "";
+}
 
     private String readContent(UUID pageId) {
-
-        StringBuilder content =
-                new StringBuilder();
-
+        StringBuilder content = new StringBuilder();
         String cursor = null;
 
         do {
-
             final String currentCursor = cursor;
 
-            JsonNode response =
-                    client.get()
-                            .uri(
-                                    uriBuilder -> {
+            JsonNode response = client.get()
+                    .uri(uriBuilder -> {
+                        var builder = uriBuilder
+                                .path("/blocks/{id}/children")
+                                .queryParam("page_size", 100);
 
-                                        var builder =
-                                                uriBuilder
-                                                        .path(
-                                                                "/blocks/{id}/children"
-                                                        )
-                                                        .queryParam(
-                                                                "page_size",
-                                                                100
-                                                        );
+                        if (currentCursor != null) {
+                            builder.queryParam("start_cursor", currentCursor);
+                        }
 
-                                        if (currentCursor != null) {
-                                            builder.queryParam(
-                                                    "start_cursor",
-                                                    currentCursor
-                                            );
-                                        }
-
-                                        return builder.build(
-                                                pageId
-                                        );
-                                    }
-                            )
-                            .retrieve()
-                            .body(JsonNode.class);
+                        return builder.build(pageId);
+                    })
+                    .retrieve()
+                    .body(JsonNode.class);
 
             if (response == null) {
                 break;
             }
 
-            for (JsonNode block :
-                    response.path("results")) {
-
-                appendBlockText(
-                        content,
-                        block
-                );
+            for (JsonNode block : response.path("results")) {
+                appendBlockText(content, block);
             }
 
-            cursor =
-                    response.path("has_more")
-                            .asBoolean(false)
-                            ? response.path("next_cursor")
-                                    .asString(null)
-                            : null;
+            cursor = response.path("has_more").asBoolean(false)
+                    ? response.path("next_cursor").asString(null)
+                    : null;
 
         } while (cursor != null);
 
         return content.toString().strip();
     }
 
-    private void appendBlockText(
-            StringBuilder out,
-            JsonNode block
-    ) {
-
-        String type =
-                block.path("type").asString();
+    private void appendBlockText(StringBuilder out, JsonNode block) {
+        String type = block.path("type").asString();
 
         if (type.isBlank()) {
             return;
         }
 
-        JsonNode richText =
-                block
-                        .path(type)
-                        .path("rich_text");
+        JsonNode richText = block.path(type).path("rich_text");
 
         if (!richText.isArray()) {
             return;
         }
 
         for (JsonNode item : richText) {
-
-            String text =
-                    item.path("plain_text")
-                            .asString(
-                                    item.path("text")
-                                            .path("content")
-                                            .asString("")
-                            );
+            String text = item.path("plain_text").asString(
+                    item.path("text").path("content").asString("")
+            );
 
             if (text.isBlank()) {
                 continue;
@@ -793,91 +641,31 @@ public NotionAdapter(
         }
     }
 
-    // -------------------------------------------------------------------------
-    // PROPERTIES
-    // -------------------------------------------------------------------------
 
-    private String extractTitle(
-            JsonNode property
-    ) {
-
-        StringBuilder title =
-                new StringBuilder();
-
-        for (JsonNode item :
-                property.path("title")) {
-
-            title.append(
-                    item.path("plain_text")
-                            .asString(
-                                    item.path("text")
-                                            .path("content")
-                                            .asString("")
-                            )
-            );
-        }
-
-        return title.toString();
+    private boolean containsIgnoreCase(String value, String query) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(query);
     }
 
-
-    // -------------------------------------------------------------------------
-    // HELPERS
-    // -------------------------------------------------------------------------
-    private boolean containsIgnoreCase(
-            String value,
-            String query
-    ) {
-
-        return value != null &&
-                value.toLowerCase(Locale.ROOT)
-                        .contains(query);
-    }
-
-    private String notionError(
-            RestClientResponseException ex
-    ) {
-
+    private String notionError(RestClientResponseException ex) {
         try {
+            String response = ex.getResponseBodyAsString();
 
-            String response =
-                    ex.getResponseBodyAsString();
+            if (response != null && !response.isBlank()) {
+                JsonNode body = mapper.readTree(response);
+                String message = body.path("message").asString(null);
 
-            if (response != null &&
-                    !response.isBlank()) {
-
-                JsonNode body =
-                        mapper.readTree(response);
-
-                String message =
-                        body.path("message")
-                                .asString(null);
-
-                if (message != null &&
-                        !message.isBlank()) {
-
+                if (message != null && !message.isBlank()) {
                     return message;
                 }
             }
-
         } catch (Exception ignored) {
         }
 
-        return ex.getStatusText()
-                + " ("
-                + ex.getStatusCode().value()
-                + ")";
+        return ex.getStatusText() + " (" + ex.getStatusCode().value() + ")";
     }
 
-    private String safeMessage(
-            Exception ex
-    ) {
-
+    private String safeMessage(Exception ex) {
         String message = ex.getMessage();
-
-        return message == null ||
-                message.isBlank()
-                ? ex.getClass().getSimpleName()
-                : message;
+        return message == null || message.isBlank() ? ex.getClass().getSimpleName() : message;
     }
 }

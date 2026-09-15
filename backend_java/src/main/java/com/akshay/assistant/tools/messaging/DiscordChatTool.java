@@ -1,7 +1,6 @@
 package com.akshay.assistant.tools.messaging;
 import com.akshay.assistant.tools.messaging.model.*;
 
-import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.MessageHistory;
 import net.dv8tion.jda.api.utils.TimeUtil;
 import net.dv8tion.jda.api.entities.User;
@@ -34,10 +33,9 @@ public class DiscordChatTool {
                 thread.setDaemon(true);
                 return thread;
             });
-    private final JDA jda;
 
     public DiscordChatTool(
-            JDA jda,
+  
             DiscordChatResolver resolver,
             @Value ("${discord.bot.auto-close-minutes}")
             long autoCloseMinutes,
@@ -45,7 +43,7 @@ public class DiscordChatTool {
             int historyPageSize,
             DiscordChatState state
     ) {
-        this.jda = jda;
+
         this.resolver = resolver;
         this.autoCloseMinutes = autoCloseMinutes;
         this.historyPageSize = historyPageSize;
@@ -61,6 +59,9 @@ public class DiscordChatTool {
      * Sends a text message to the supplied Discord chat.
      * If chatName is omitted, the current open conversation is used.
      */
+    // public ChatResponse sendMessageById(String message, String chatId){
+    //     if(message == null)
+    // }
     public ChatResponse sendMessage(String message, String chatName) {
         if (message == null || message.isBlank()) {
             return ChatResponse.error("OperationError", "Message cannot be empty.");

@@ -36,6 +36,7 @@ notion:
     token: ${NOTION_TOKEN}
     version: "2022-06-28"
     page-id: 3db54d38bea18014b882e5de2298bbd5
+    data-source-id: 3dc54d38bea1809ab9acd3761fe06cf7
 
 discord:
   bot:
