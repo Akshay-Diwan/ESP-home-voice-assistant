@@ -33,9 +33,15 @@ calendar:
     timezone: Asia/Kolkata
 
 notion:
-    token: "${NOTION_TOKEN}"
+    token: ${NOTION_TOKEN}
     version: "2022-06-28"
     page-id: 3db54d38bea18014b882e5de2298bbd5
+
+discord:
+  bot:
+    token: ${DISCORD_BOT_TOKEN}
+    auto-close-minutes: 5
+    history-page-size: 100
 
 logging:
   level:
