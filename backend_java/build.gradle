@@ -46,6 +46,14 @@ dependencies {
 	//Discord
 	implementation 'net.dv8tion:JDA:6.6.0'
 
+	//MCP
+	implementation platform("org.springframework.ai:spring-ai-bom:1.1.0")
+	//MCP Server
+    implementation "org.springframework.ai:spring-ai-starter-mcp-server-webmvc"
+
+	//MCP Client
+	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
+	implementation 'org.springframework.ai:spring-ai-starter-mcp-client'
 
 	testImplementation 'org.mockito:mockito-core:5.19.0'
 	testImplementation 'org.mockito:mockito-junit-jupiter:5.19.0'

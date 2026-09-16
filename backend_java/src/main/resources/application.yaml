@@ -11,8 +11,7 @@ spring:
     hibernate:
       ddl-auto: create
 
-    # show-sql: true
-
+    # show-sql: true  
     properties:
       hibernate:
         format_sql: true
@@ -44,6 +43,27 @@ discord:
     auto-close-minutes: 5
     history-page-size: 100
 
+
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: qwen2.5:3b
+        options:
+          temperature: 0.2
+    mcp:
+
+      server:
+        streamable-http:
+          enabled: true
+          mcp-endpoint: /mcp
+          disallow-unconfigured-clients: false
+      client:
+        enabled: true
+        name: local-assistant
+        version: 1.0.0
+        type: SYNC
+        transport: IN_PROCESS
 logging:
   level:
     org:
@@ -52,3 +72,5 @@ logging:
         orm:
           jdbc:
             bind: TRACE
+    org.springframework.web: DEBUG
+    org.springframework.ai.mcp: DEBUG

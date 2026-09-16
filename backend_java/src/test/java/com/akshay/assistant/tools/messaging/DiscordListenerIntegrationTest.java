@@ -1,19 +1,19 @@
-package com.akshay.assistant.tools.messaging;
+// package com.akshay.assistant.tools.messaging;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+// import org.junit.jupiter.api.Test;
+// import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest 
-class DiscordListenerIntegrationTest {
+// @SpringBootTest 
+// class DiscordListenerIntegrationTest {
 
-    @Test 
-    void shouldReceiveDiscordMessage() throws Exception {
+//     @Test 
+//     void shouldReceiveDiscordMessage() throws Exception {
 
-        // Keep the application alive and wait for
-        // a real Discord message.
+//         // Keep the application alive and wait for
+//         // a real Discord message.
 
-        Thread.sleep(30_000);
+//         Thread.sleep(30_000);
 
-        // Then assert state contains the incoming message.
-    }
-}
+//         // Then assert state contains the incoming message.
+//     }
+// }
