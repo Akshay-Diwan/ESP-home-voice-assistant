@@ -3,9 +3,9 @@ spring:
     name: java_backend
 
   datasource:
-    url: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
-    username: postgres.dxgzfugilsceplbhvkhl
-    password: REMOVED
+    url: ${POSGRES_URI}
+    username: ${PG_USERNAME}
+    password: ${PG_PASS}
 
   jpa:
     hibernate:
@@ -28,7 +28,7 @@ calendar:
   google:
     application-name: ESP Assistant Calendar Tool
     credentials-file: classpath:credentials.json
-    calendar-id: akwork6124@gmail.com
+    calendar-id: ${CALENDAR_ID}
     timezone: Asia/Kolkata
 
 notion:
