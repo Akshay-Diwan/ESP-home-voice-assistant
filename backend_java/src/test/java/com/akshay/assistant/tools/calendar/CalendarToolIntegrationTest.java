@@ -191,7 +191,8 @@
 
 //         // 15:00 - 16:00
 //         CalendarResponse first = calendarTool.createEvent(
-//                 "First Adjacent Event",
+//      
+                            // "First Adjacent Event",
 //                 start,
 //                 end,
 //                 "First"

@@ -12,11 +12,11 @@ import java.util.List;
 import java.util.UUID;
 
 @Component
-public class ReminderMcpTools {
+public class ReminderTools {
 
     private final ReminderService reminderService;
 
-    public ReminderMcpTools(ReminderService reminderService) {
+    public ReminderTools(ReminderService reminderService) {
         this.reminderService = reminderService;
     }
 
