@@ -14,11 +14,11 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 
 @Component
-public class DiscordMcpTools {
+public class DiscordTools {
 
     private final DiscordChatTool discordChatTool;
 
-    public DiscordMcpTools(DiscordChatTool discordChatTool) {
+    public DiscordTools(DiscordChatTool discordChatTool) {
         this.discordChatTool = discordChatTool;
     }
 

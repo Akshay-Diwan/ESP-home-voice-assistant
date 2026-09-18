@@ -43,3 +43,5 @@ src/main/resources/credentials.json
 /Curl/
 replacement.txt
 secrets.sh
+test-cases.json
+benchmark-results/

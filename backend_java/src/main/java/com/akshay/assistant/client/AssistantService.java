@@ -4,6 +4,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.stereotype.Service;
 
+import com.akshay.assistant.tools.messaging.mcp.DiscordTools;
 import com.akshay.assistant.tools.reminder.mcp.ReminderTools;
 
 @Service
@@ -11,13 +12,16 @@ public class AssistantService {
 
     private final ChatClient chatClient;
     private final ReminderTools reminderTools;
+    private final DiscordTools discordTools;
 
-        public AssistantService(
+    public AssistantService(
             ChatClient chatClient,
-            ReminderTools reminderTools
+            ReminderTools reminderTools,
+            DiscordTools discordTools
     ) {
         this.chatClient = chatClient;
         this.reminderTools = reminderTools;
+        this.discordTools = discordTools;
     }
     public String chat(String message) {
 
@@ -44,7 +48,7 @@ public class AssistantService {
                                 .model("qwen2.5:3b")
                                 .build()
                 )
-                .tools(reminderTools)
+                .tools(reminderTools, discordTools)
                 .call()
                 .content();
     }

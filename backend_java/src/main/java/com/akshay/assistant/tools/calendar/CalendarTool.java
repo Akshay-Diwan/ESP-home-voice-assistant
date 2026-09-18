@@ -5,6 +5,7 @@ import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.EventDateTime;
 import com.google.api.services.calendar.model.Events;
+import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +36,10 @@ public class CalendarTool {
         this.zoneId = ZoneId.of(timezone);
     }
 
+    @Tool(
+        name = "create_calendar_event",
+        description = "Create a calendar event with a name, start time, optional end time, and optional description. If end time is not provided, the event lasts one hour."
+    )
     public CalendarResponse createEvent(
             String eventName,
             LocalDateTime startTime,
@@ -42,11 +47,17 @@ public class CalendarTool {
             String description
     ) {
         if (isBlank(eventName)) {
-            return CalendarResponse.error("InvalidData", "event_name cannot be empty.");
+            return CalendarResponse.error(
+                    "InvalidData",
+                    "event_name cannot be empty."
+            );
         }
 
         if (startTime == null) {
-            return CalendarResponse.error("InvalidData", "start_time cannot be null.");
+            return CalendarResponse.error(
+                    "InvalidData",
+                    "start_time cannot be null."
+            );
         }
 
         if (endTime == null) {
@@ -61,7 +72,9 @@ public class CalendarTool {
         }
 
         try {
-            List<Event> conflicts = findOverlappingEvents(startTime, endTime);
+            List<Event> conflicts =
+                    findOverlappingEvents(startTime, endTime);
+
             if (!conflicts.isEmpty()) {
                 return CalendarResponse.conflict(conflicts);
             }
@@ -75,31 +88,38 @@ public class CalendarTool {
                     .setEnd(toEventDateTime(endTime))
                     .setExtendedProperties(
                             new Event.ExtendedProperties()
-                                    .setPrivate(Map.of(TOOL_ID_PROPERTY, publicId))
+                                    .setPrivate(
+                                            Map.of(
+                                                    TOOL_ID_PROPERTY,
+                                                    publicId
+                                            )
+                                    )
                     );
 
             Event created = googleCalendar.events()
                     .insert(calendarId, event)
                     .execute();
 
-            return CalendarResponse.success(toEventDto(created, publicId));
+            return CalendarResponse.success(
+                    toEventDto(created, publicId)
+            );
 
         } catch (IOException e) {
-            return CalendarResponse.error("OperationError", e.getMessage());
+            return CalendarResponse.error(
+                    "OperationError",
+                    e.getMessage()
+            );
         }
     }
 
-    public CalendarResponse createEvent(
-            String eventName,
-            LocalDateTime startTime,
-            String description
+    @Tool(
+        name = "update_calendar_event",
+        description = "Update an existing calendar event using its event ID. Only the fields provided in the update data are changed."
+    )
+    public CalendarResponse updateEvent(
+            String eventId,
+            EventUpdate data
     ) {
-        return createEvent(eventName, startTime, startTime.plusHours(1), description);
-    }
-
-    // updateEvent(event_id, data)
-    
-    public CalendarResponse updateEvent(String eventId, EventUpdate data) {
         if (data == null) {
             return CalendarResponse.error(
                     "NoDataProvided",
@@ -116,7 +136,11 @@ public class CalendarTool {
         );
     }
 
-    public CalendarResponse updateEvent(
+    /*
+     * Internal implementation.
+     * This method is NOT a tool.
+     */
+    private CalendarResponse updateEvent(
             String eventId,
             String eventName,
             LocalDateTime startTime,
@@ -124,10 +148,17 @@ public class CalendarTool {
             String description
     ) {
         if (isBlank(eventId)) {
-            return CalendarResponse.error("InvalidData", "event_id cannot be empty.");
+            return CalendarResponse.error(
+                    "InvalidData",
+                    "event_id cannot be empty."
+            );
         }
 
-        if (eventName == null && startTime == null && endTime == null && description == null) {
+        if (eventName == null &&
+                startTime == null &&
+                endTime == null &&
+                description == null) {
+
             return CalendarResponse.error(
                     "NoDataProvided",
                     "provide atleast one parameter"
@@ -144,11 +175,17 @@ public class CalendarTool {
                 );
             }
 
-            LocalDateTime oldStart = fromEventDateTime(existing.getStart());
-            LocalDateTime oldEnd = fromEventDateTime(existing.getEnd());
+            LocalDateTime oldStart =
+                    fromEventDateTime(existing.getStart());
 
-            LocalDateTime newStart = startTime != null ? startTime : oldStart;
-            LocalDateTime newEnd = endTime != null ? endTime : oldEnd;
+            LocalDateTime oldEnd =
+                    fromEventDateTime(existing.getEnd());
+
+            LocalDateTime newStart =
+                    startTime != null ? startTime : oldStart;
+
+            LocalDateTime newEnd =
+                    endTime != null ? endTime : oldEnd;
 
             if (!newStart.isBefore(newEnd)) {
                 return CalendarResponse.error(
@@ -158,11 +195,13 @@ public class CalendarTool {
             }
 
             if (startTime != null || endTime != null) {
-                List<Event> conflicts = findOverlappingEvents(
-                        newStart,
-                        newEnd,
-                        existing.getId()
-                );
+
+                List<Event> conflicts =
+                        findOverlappingEvents(
+                                newStart,
+                                newEnd,
+                                existing.getId()
+                        );
 
                 if (!conflicts.isEmpty()) {
                     return CalendarResponse.conflict(conflicts);
@@ -178,27 +217,46 @@ public class CalendarTool {
             }
 
             if (startTime != null) {
-                existing.setStart(toEventDateTime(startTime));
+                existing.setStart(
+                        toEventDateTime(startTime)
+                );
             }
 
             if (endTime != null) {
-                existing.setEnd(toEventDateTime(endTime));
+                existing.setEnd(
+                        toEventDateTime(endTime)
+                );
             }
 
             googleCalendar.events()
-                    .update(calendarId, existing.getId(), existing)
+                    .update(
+                            calendarId,
+                            existing.getId(),
+                            existing
+                    )
                     .execute();
 
             return CalendarResponse.success(null);
 
         } catch (IOException e) {
-            return CalendarResponse.error("OperationError", e.getMessage());
+            return CalendarResponse.error(
+                    "OperationError",
+                    e.getMessage()
+            );
         }
     }
 
+    @Tool(
+        name = "delete_calendar_event",
+        description = "Delete a calendar event using its event ID."
+    )
     public CalendarResponse deleteEvent(String eventId) {
+
         if (isBlank(eventId)) {
-            return CalendarResponse.error("InvalidData", "event_id cannot be empty.");
+            return CalendarResponse.error(
+                    "InvalidData",
+                    "event_id cannot be empty."
+            );
         }
 
         try {
@@ -211,24 +269,38 @@ public class CalendarTool {
                 );
             }
 
-            EventDto deleted = toEventDto(existing, eventId);
+            EventDto deleted =
+                    toEventDto(existing, eventId);
 
             googleCalendar.events()
-                    .delete(calendarId, existing.getId())
+                    .delete(
+                            calendarId,
+                            existing.getId()
+                    )
                     .execute();
 
             return CalendarResponse.deleted(deleted);
 
         } catch (IOException e) {
-            return CalendarResponse.error("OperationError", e.getMessage());
+            return CalendarResponse.error(
+                    "OperationError",
+                    e.getMessage()
+            );
         }
     }
 
+    @Tool(
+        name = "list_calendar_events",
+        description = "List all calendar events between a start time and an end time."
+    )
     public CalendarResponse listEvents(
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
-        if (startTime == null || endTime == null || !startTime.isBefore(endTime)) {
+        if (startTime == null ||
+                endTime == null ||
+                !startTime.isBefore(endTime)) {
+
             return CalendarResponse.error(
                     "InvalidTimeRange",
                     "start_time must be earlier than end_time."
@@ -238,8 +310,12 @@ public class CalendarTool {
         try {
             Events events = googleCalendar.events()
                     .list(calendarId)
-                    .setTimeMin(toGoogleDateTime(startTime))
-                    .setTimeMax(toGoogleDateTime(endTime))
+                    .setTimeMin(
+                            toGoogleDateTime(startTime)
+                    )
+                    .setTimeMax(
+                            toGoogleDateTime(endTime)
+                    )
                     .setSingleEvents(true)
                     .setOrderBy("startTime")
                     .setShowDeleted(false)
@@ -248,21 +324,41 @@ public class CalendarTool {
             List<EventDto> result = new ArrayList<>();
 
             for (Event event : events.getItems()) {
-                if (event.getStatus() == null || !"cancelled".equals(event.getStatus())) {
-                    String publicId = getPublicId(event);
-                    result.add(toEventDto(event, publicId));
+
+                if (event.getStatus() == null ||
+                        !"cancelled".equals(event.getStatus())) {
+
+                    String publicId =
+                            getPublicId(event);
+
+                    result.add(
+                            toEventDto(event, publicId)
+                    );
                 }
             }
 
-            result.sort(Comparator.comparing(EventDto::startTime));
+            result.sort(
+                    Comparator.comparing(
+                            EventDto::startTime
+                    )
+            );
+
             return CalendarResponse.events(result);
 
         } catch (IOException e) {
-            return CalendarResponse.error("OperationError", e.getMessage());
+            return CalendarResponse.error(
+                    "OperationError",
+                    e.getMessage()
+            );
         }
     }
 
+    @Tool(
+        name = "search_calendar_events",
+        description = "Search calendar events by a text query. The query can match event names and other searchable calendar fields."
+    )
     public CalendarResponse searchEvents(String query) {
+
         if (isBlank(query)) {
             return CalendarResponse.error(
                     "InvalidQuery",
@@ -279,25 +375,48 @@ public class CalendarTool {
                     .setShowDeleted(false)
                     .execute();
 
-            List<EventDto> result = events.getItems()
-                    .stream()
-                    .filter(e -> !"cancelled".equals(e.getStatus()))
-                    .map(e -> toEventDto(e, getPublicId(e)))
-                    .sorted(Comparator.comparing(EventDto::startTime))
-                    .toList();
+            List<EventDto> result =
+                    events.getItems()
+                            .stream()
+                            .filter(
+                                    e -> !"cancelled"
+                                            .equals(e.getStatus())
+                            )
+                            .map(
+                                    e -> toEventDto(
+                                            e,
+                                            getPublicId(e)
+                                    )
+                            )
+                            .sorted(
+                                    Comparator.comparing(
+                                            EventDto::startTime
+                                    )
+                            )
+                            .toList();
 
             return CalendarResponse.events(result);
 
         } catch (IOException e) {
-            return CalendarResponse.error("OperationError", e.getMessage());
+            return CalendarResponse.error(
+                    "OperationError",
+                    e.getMessage()
+            );
         }
     }
 
-    private Event findByPublicId(String publicId) throws IOException {
+    private Event findByPublicId(
+            String publicId
+    ) throws IOException {
+
         Events events = googleCalendar.events()
                 .list(calendarId)
                 .setPrivateExtendedProperty(
-                        List.of(TOOL_ID_PROPERTY + "=" + publicId)
+                        List.of(
+                                TOOL_ID_PROPERTY
+                                        + "="
+                                        + publicId
+                        )
                 )
                 .setSingleEvents(false)
                 .setShowDeleted(false)
@@ -313,7 +432,12 @@ public class CalendarTool {
             LocalDateTime newStart,
             LocalDateTime newEnd
     ) throws IOException {
-        return findOverlappingEvents(newStart, newEnd, null);
+
+        return findOverlappingEvents(
+                newStart,
+                newEnd,
+                null
+        );
     }
 
     private List<Event> findOverlappingEvents(
@@ -322,21 +446,14 @@ public class CalendarTool {
             String ignoredGoogleEventId
     ) throws IOException {
 
-        /*
-         * Google Calendar's timeMax/timeMin give us a candidate set.
-         * We then perform the exact interval test:
-         *
-         * existing.start < requested.end
-         * &&
-         * existing.end > requested.start
-         *
-         * Adjacent events such as 10:00-11:00 and 11:00-12:00
-         * therefore do not conflict.
-         */
         Events events = googleCalendar.events()
                 .list(calendarId)
-                .setTimeMin(toGoogleDateTime(newStart))
-                .setTimeMax(toGoogleDateTime(newEnd))
+                .setTimeMin(
+                        toGoogleDateTime(newStart)
+                )
+                .setTimeMax(
+                        toGoogleDateTime(newEnd)
+                )
                 .setSingleEvents(true)
                 .setShowDeleted(false)
                 .execute();
@@ -344,21 +461,28 @@ public class CalendarTool {
         List<Event> conflicts = new ArrayList<>();
 
         for (Event event : events.getItems()) {
+
             if (ignoredGoogleEventId != null &&
                     ignoredGoogleEventId.equals(event.getId())) {
                 continue;
             }
 
-            if (event.getStart() == null || event.getEnd() == null ||
+            if (event.getStart() == null ||
+                    event.getEnd() == null ||
                     event.getStart().getDateTime() == null ||
                     event.getEnd().getDateTime() == null) {
                 continue;
             }
 
-            LocalDateTime existingStart = fromEventDateTime(event.getStart());
-            LocalDateTime existingEnd = fromEventDateTime(event.getEnd());
+            LocalDateTime existingStart =
+                    fromEventDateTime(event.getStart());
 
-            if (existingStart.isBefore(newEnd) && existingEnd.isAfter(newStart)) {
+            LocalDateTime existingEnd =
+                    fromEventDateTime(event.getEnd());
+
+            if (existingStart.isBefore(newEnd) &&
+                    existingEnd.isAfter(newStart)) {
+
                 conflicts.add(event);
             }
         }
@@ -366,43 +490,66 @@ public class CalendarTool {
         return conflicts;
     }
 
-    private EventDateTime toEventDateTime(LocalDateTime time) {
+    private EventDateTime toEventDateTime(
+            LocalDateTime time
+    ) {
         return new EventDateTime()
-                .setDateTime(toGoogleDateTime(time))
-                .setTimeZone(zoneId.getId());
+                .setDateTime(
+                        toGoogleDateTime(time)
+                )
+                .setTimeZone(
+                        zoneId.getId()
+                );
     }
 
-    private DateTime toGoogleDateTime(LocalDateTime time) {
+    private DateTime toGoogleDateTime(
+            LocalDateTime time
+    ) {
         return new DateTime(
-                time.atZone(zoneId).toInstant().toEpochMilli()
+                time.atZone(zoneId)
+                        .toInstant()
+                        .toEpochMilli()
         );
     }
 
-    private LocalDateTime fromEventDateTime(EventDateTime eventDateTime) {
-        return Instant.ofEpochMilli(eventDateTime.getDateTime().getValue())
+    private LocalDateTime fromEventDateTime(
+            EventDateTime eventDateTime
+    ) {
+        return Instant.ofEpochMilli(
+                        eventDateTime
+                                .getDateTime()
+                                .getValue()
+                )
                 .atZone(zoneId)
                 .toLocalDateTime();
     }
 
     private String getPublicId(Event event) {
+
         if (event.getExtendedProperties() != null &&
                 event.getExtendedProperties().getPrivate() != null) {
+
             return event.getExtendedProperties()
                     .getPrivate()
                     .get(TOOL_ID_PROPERTY);
         }
 
-        // Events created outside this tool do not have our UUID.
-        // The Google event id is still returned so they remain usable.
         return event.getId();
     }
 
-    private EventDto toEventDto(Event event, String publicId) {
+    private EventDto toEventDto(
+            Event event,
+            String publicId
+    ) {
         return new EventDto(
                 publicId,
                 event.getSummary(),
-                fromEventDateTime(event.getStart()),
-                fromEventDateTime(event.getEnd()),
+                fromEventDateTime(
+                        event.getStart()
+                ),
+                fromEventDateTime(
+                        event.getEnd()
+                ),
                 event.getDescription()
         );
     }
@@ -411,3 +558,4 @@ public class CalendarTool {
         return value == null || value.isBlank();
     }
 }
+
